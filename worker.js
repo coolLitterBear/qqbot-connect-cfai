@@ -93,6 +93,25 @@ export default {
       status: 200,
       headers: {'Content-Type': 'application/json'}
     });
+  },
+
+  // ===== 新增：Cron 触发器 =====
+  async scheduled(controller, env, ctx) {
+    const db = env.qqbotdb;
+    db?.prepare('CREATE TABLE IF NOT EXISTS logs (...)').run().catch(() => {});
+    
+    log(db, '=== Cron 执行：重置神经元 ===');
+    try {
+      const maxNeuron = await env.qqbot.get('maxNeuron');
+      if (maxNeuron) {
+        await env.qqbot.put('remainingNeuron', maxNeuron);
+        log(db, '神经元已重置: ' + maxNeuron);
+      } else {
+        log(db, 'maxNeuron 未设置，跳过');
+      }
+    } catch (e) {
+      log(db, 'Cron 重置失败: ' + e.message);
+    }
   }
 };
 
@@ -123,8 +142,23 @@ async function handleMessage(userMsg, userId, msgId, env, db) {
 
     // 调用 AI
     log(db, '【后台】调用 AI...');
-    const aiResult = await callAI(model, systemMessage, userMsg, contentKeys, reasoningKeys, showThinking, env, db);
+    const neuronUsagePath = await env.qqbot.get('neuronUsage')
+    const aiResult = await callAI(model, systemMessage, userMsg, contentKeys, reasoningKeys, showThinking, env, db, neuronUsagePath);
     log(db, '【后台】AI 回复: ' + aiResult.substring(0, 100));
+
+    // 扣除神经元
+  if (usage !== null && usage !== undefined) {
+    try {
+      const remaining = await env.qqbot.get('remainingNeuron');
+      const current = parseFloat(remaining) || 0;
+      const newRemaining = current - parseFloat(usage);
+      await env.qqbot.put('remainingNeuron', String(newRemaining));
+      log(db, '【后台】神经元扣除: ' + usage + ', 剩余: ' + newRemaining);
+    } catch (e) {
+      log(db, '【后台】神经元记录失败: ' + e.message);
+    }
+  }
+
 
     // 获取 QQ Token
     log(db, '【后台】获取 Token...');
@@ -143,7 +177,7 @@ async function handleMessage(userMsg, userId, msgId, env, db) {
 }
 
 // ===== 调用 Cloudflare Workers AI =====
-async function callAI(model, systemMessage, userMessage, contentKeys, reasoningKeys, showThinking, env, db) {
+async function callAI(model, systemMessage, userMessage, contentKeys, reasoningKeys, showThinking, env, db, neuronUsagePath) {
   const apiUrl = `https://api.cloudflare.com/client/v4/accounts/${env.accountId}/ai/run/${model}`;
   log(db, '【后台】AI URL: ' + apiUrl);
 
@@ -191,7 +225,27 @@ async function callAI(model, systemMessage, userMessage, contentKeys, reasoningK
     }
   }
 
-  return reply;
+  // 提取神经元用量（新增）
+  let usage = null;
+  if (neuronUsagePath) {
+    try {
+      const usageKeys = JSON.parse(neuronUsagePath);
+      let u = data;
+      for (const key of usageKeys) {
+        if (u === undefined || u === null) break;
+        u = u[key];
+      }
+      if (typeof u === 'number') {
+        usage = u;
+        log(db, '【后台】神经元用量: ' + usage);
+      }
+    } catch (e) {
+      log(db, '【后台】提取神经元用量失败: ' + e.message);
+   }
+  }
+
+  return {reply, usage};
+
 }
 
 // ===== 获取 QQ Access Token =====
