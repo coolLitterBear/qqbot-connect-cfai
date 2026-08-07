@@ -2,16 +2,6 @@ name = "qqbot"
 main = "src/index.js"
 compatibility_date = "2024-01-01"
 
-# Cron 触发器：每天 UTC 0 点重置神经元
+# Cron：每天 UTC 0 点重置神经元
 [triggers]
 crons = ["0 0 * * *"]
-
-# KV 命名空间绑定（替换为你的实际 ID）
-[[kv_namespaces]]
-binding = "qqbot"
-id = "your_kv_namespace_id"
-
-# D1 数据库绑定（替换为你的实际 ID）
-[[d1_databases]]
-binding = "qqbotdb"
-database_id = "your_d1_database_id"
