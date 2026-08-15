@@ -1,6 +1,6 @@
-name = "qqbot"
+name = "qqbot-connect-cfai"
 main = "src/index.js"
-compatibility_date = "2024-01-01"
+compatibility_date = "2026-08-15"
 
 # Cron：每天 UTC 0 点重置神经元
 [triggers]
